@@ -50,26 +50,26 @@ servers.
 
 ## What I'd do differently — the /29 lesson
 
-I divided every VLAN using /29 subnets — 8 addresses, 6 usable. The
-current devices fit:
+I divided every VLAN using /29 subnets — 8 addresses, 6 usable. One
+usable address goes to the router subinterface gateway. That leaves
+**5 usable hosts per VLAN**, no matter how many the department has.
 
-| VLAN | Department | Devices | Fits in /29? |
+| VLAN | Department | Devices | Usable |
 |---|---|---|---|
-| 10 | Administration | 2 | Yes |
-| 20 | HR | 1 | Yes |
-| 30 | Finance | 1 | Yes |
-| 40 | Management | 1 | Yes |
-| 50 | Development | 3 | Yes |
-| 60 | Server Operations | 1 | Yes |
+| 10 | Administration | 2 | 5 |
+| 20 | HR | 1 | 5 |
+| 30 | Finance | 1 | 5 |
+| 40 | Management | 1 | 5 |
+| 50 | Development | 3 | 5 |
+| 60 | Server Operations | 1 | 5 |
 
-But there is **zero growth headroom.** Development already has 3 of
-its 6 usable addresses used. If the department hires one more person
-next month, that host cannot get an IP without renumbering the VLAN.
+Development is at 3 of 5. Two more hires and the VLAN is full.
 
-The right design starts from host count per department *plus* a
-growth margin, and uses VLSM — variable-length masks — so each subnet
-is sized to its department. FLSM /29 was a shortcut that passed the
-rubric but would fail in a real office.
+The right design starts from host count per department plus a growth
+margin and uses VLSM — variable-length masks — so each subnet is
+sized to its department. FLSM /29 was a shortcut that fit the
+assignment but would fail in a real office the moment one department
+grew.
 
 This was the single most valuable mistake in the project.
 

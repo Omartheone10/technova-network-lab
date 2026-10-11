@@ -2,8 +2,7 @@
 
 Cisco Packet Tracer lab for a multi-floor company network. Coursework
 assignment (jointly assigned with a teammate) — designed, built, and
-documented entirely by me. I later taught my teammate to rebuild it
-from scratch.
+documented entirely by me.
 
 ## Scenario
 
@@ -41,12 +40,6 @@ servers.
 - `show ip ssh` → SSH Enabled, version 1.99
 - `show ip interface brief` → active ports up, unused ports
   administratively down
-- `show vlan brief`, `show interfaces trunk` → VLANs assigned,
-  trunk allowing 10,20,30,40,50,60
-- ICMP ping inside each VLAN
-- ICMP ping across VLANs (inter-VLAN routing works)
-- ICMP ping R1 → R2 (RIP v2 routes learned)
-- SSH login from a management host
 
 ## What I'd do differently — the /29 lesson
 
@@ -81,8 +74,4 @@ simulation results.
 
 ## Tools
 
-Cisco Packet Tracer 8.x.
-
-## License
-
-MIT.
+Cisco Packet Tracer.

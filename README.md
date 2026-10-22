@@ -8,11 +8,24 @@ The complete project file ([`technova-lab.pkt`](technova-lab.pkt)) is in this re
 
 TechNova Solutions is a multi-floor office with six departments: Administration, HR, Finance, Management, Development, and Server Operations. The company has a small branch office that must communicate with the main office via dynamic routing. Each department is isolated into its own VLAN, with controlled inter-VLAN communication. Management requires access to all departments and servers.
 
+## Credentials
+
+The `.pkt` file opens freely, but the devices themselves are hardened — they will prompt you. Use these lab credentials to inspect anything:
+
+| Device | SSH login (username / password) | Enable secret | Console line password |
+|---|---|---|---|
+| R1 | admin / admin123 | cisco123 | letmein |
+| R2 | admin / admin123 | cisco123 | letmein |
+| SW1 | admin / admin123 | cisco123 | letmein |
+| SW2 | admin / admin123 | cisco123 | letmein |
+
+VTY lines use `login local`, so SSH sessions authenticate against the named user (admin / admin123); console uses the line password (letmein); entering privileged EXEC requires the enable secret (cisco123). These are lab-only credentials, published deliberately so that anyone can audit the configuration — they protect a simulation, not a live network.
+
 ## Topology
 
 - 2 routers, 2 switches, 11 end devices
 - **Main office:** R1 + SW1 + 6 VLANs on router-on-a-stick; 9 end devices across six department groups (Admin 2 · HR 1 · Finance 1 · Management 1 · Development 3 · Server Ops 1)
-- **Branch office:** R2 + SW2 + 2 hosts; SW2 is a flat Layer 2 switch (see known limitation below)
+- **Branch office:** R2 + SW2 + 2 hosts; SW2 is hardened but operates as a flat Layer 2 switch (see known limitation below)
 - **WAN link:** R1 Gi0/1 ↔ R2 Gi0/0 (`10.0.0.8/30`) running RIP v2
 - **Downlinks:** R1 Gi0/0 → SW1 Gi0/1 (802.1Q trunk) · R2 Gi0/1 → SW2
 
@@ -27,8 +40,8 @@ TechNova Solutions is a multi-floor office with six departments: Administration,
 - **Dynamic routing:** RIP v2 between R1 and R2
 - **Addressing:** /29 **FLSM** — one subnet per VLAN, plus a /30 WAN link (see the design lesson below — the fixed mask was my key mistake)
 - **Access control:** extended ACLs 101–103 and 105–106, applied inbound on the matching R1 subinterface, enforce department isolation; **no ACL restricts VLAN 40** — Management reaches everything, per the brief
-- **SSH:** enabled on R1, R2, SW1 (`transport input ssh` on vty); the capture below is R1
-- **Hardening:** `banner motd`, `service password-encryption`, `enable secret`, port-security with sticky MACs, unused ports administratively shut down
+- **SSH:** enabled on R1, R2, SW1, SW2 (`transport input ssh` + `login local` on vty 0–4); captures below cover R1 and R2
+- **Hardening:** `banner motd`, `service password-encryption`, `enable secret` plus a named local user, port-security with sticky MACs on switch access ports, unused ports administratively shut down — applied on all four devices
 
 ### Addressing (as verified in `show ip route` below)
 
@@ -247,7 +260,7 @@ Ping statistics for 192.168.10.42:
 C:\>
 ```
 
-The four `deny` hit counters on ACL 101 match the four blocked pings above. Note *why* the blocked pings fail the way they do: the replies come from 192.168.10.1 — the router itself, rejecting the packet at the inbound ACL on the source subinterface — instead of a silent timeout. That distinction is the ACL working, not a missing route.
+The four `deny` hit counters on ACL 101 match the four blocked pings above. Note *why* the blocked pings fail the way they do: the replies come from 192.168.10.1 — the router itself, rejecting the packet at the inbound ACL on the source subinterface — instead of a silent timeout. That distinction is the ACL working, not a missing route. The TTL column is a second, independent check: 128 for intra-VLAN (zero router hops), 127 for inter-VLAN via R1 (one hop).
 
 </details>
 
@@ -261,6 +274,101 @@ Authentication timeout: 120 secs; Authentication retries: 3
 ```
 
 This proves the SSH server is enabled and running on R1. It is a server-status capture, not a login session — no session transcript is claimed.
+
+</details>
+
+<details>
+<summary>R2 configuration — hardening and RIP v2, verbatim</summary>
+
+```text
+R2#show running-config
+Building configuration...
+
+!
+version 15.1
+no service timestamps log datetime msec
+no service timestamps debug datetime msec
+service password-encryption
+!
+hostname R2
+!
+enable secret 5 $1$mERr$5.a6P4JqbNiMX01usIfka/
+!
+ip cef
+no ipv6 cef
+!
+username admin secret 5 $1$mERr$AFX/pZT1Lh7NP3Dp3P/qq/
+!
+ip domain-name lab.com
+!
+interface GigabitEthernet0/0
+ ip address 10.0.0.10 255.255.255.252
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/1
+ ip address 192.168.20.1 255.255.255.248
+ duplex auto
+ speed auto
+!
+router rip
+ version 2
+ network 10.0.0.0
+ network 192.168.20.0
+ no auto-summary
+!
+banner motd ^CAUTHORIZED ACCESS ONLY. UNAUTHORIZED ACCESS IS PROHIBITED.^C
+!
+line con 0
+ password 7 082D495A041C0C19
+ login
+!
+line vty 0 4
+ password 7 082D495A041C0C19
+ login local
+ transport input ssh
+!
+end
+```
+
+The hashed secrets and the type-7 line password are shown exactly as stored; their plaintext equivalents are in the Credentials section above — that publication is the point, so any reviewer can get in. The `Current configuration : … bytes` header line is omitted because it changes with every config edit; everything else is verbatim, captured after the leftover-config cleanup described in the design lessons.
+
+</details>
+
+<details>
+<summary>SSH server status (R2)</summary>
+
+```text
+R2#show ip ssh
+SSH Enabled - version 1.99
+Authentication timeout: 120 secs; Authentication retries: 3
+```
+
+</details>
+
+<details>
+<summary>End-to-end ping, main office → branch (the RIP route, proven at the data plane)</summary>
+
+```text
+Cisco Packet Tracer PC Command Line 1.0
+C:\>ping 192.168.20.2
+
+Pinging 192.168.20.2 with 32 bytes of data:
+
+Request timed out.
+Reply from 192.168.20.2: bytes=32 time<1ms TTL=126
+Reply from 192.168.20.2: bytes=32 time<1ms TTL=126
+Reply from 192.168.20.2: bytes=32 time<1ms TTL=126
+
+Ping statistics for 192.168.20.2:
+    Packets: Sent = 4, Received = 3, Lost = 1 (25% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 0ms, Maximum = 0ms, Average = 0ms
+
+C:\>
+```
+
+The first timeout is ARP resolution for the default gateway, same as in the matrix above. The replies carry TTL=126 — 128 minus two router hops (R1, then R2) — which is the data-plane signature of main office → WAN → branch, not just a control-plane entry in `show ip route`.
 
 </details>
 
@@ -281,9 +389,13 @@ I divided every VLAN using /29 subnets — 8 addresses, 6 usable. One usable add
 
 Development is at 3 of 5 — two more hires and the VLAN is full. The right design starts from host count per department plus a growth margin and uses **VLSM** to size each subnet properly. FLSM /29 was a shortcut that fit the assignment but would fail in a real office. This was the single most valuable mistake in the project: **subnet design starts from the host count, not from a convenient mask.**
 
+### Leftover config artifacts, caught in audit
+
+Two leftovers survived the build until a final `show running-config` audit: a ghost `network 192.168.30.0` inside the RIP process on **both** routers (no interface anywhere in that range — harmless to convergence, instantly visible to any engineer reading the config), and an orphaned `interface GigabitEthernet0/0.10` on R1 carrying `ip access-group 101 in` with no IP address and no 802.1Q encapsulation. Both were removed before shipping. The lesson: audit the running config end-to-end before calling a build done, because leftover lines ship silently and read as carelessness.
+
 ### Branch office limitation
 
-SW2 operates as a flat Layer 2 switch in the branch office. Functional for this assignment's scope; a production deployment would mirror the main office's VLAN segmentation and port-security hardening. Documented as a known limitation, not hidden.
+SW2 carries the same security baseline as the main office — `enable secret`, named local user, `banner motd`, `service password-encryption`, `transport input ssh` with `login local` on vty 0–4, port-security on access ports, unused ports shut down. Its limitation is segmentation, not hardening: it operates as a flat Layer 2 switch (everything in VLAN 1). A production branch would mirror the main office's per-department VLANs. Documented as a known limitation, not hidden.
 
 ### What Packet Tracer simulated
 
@@ -292,8 +404,8 @@ Packet Tracer is a simulator. It does not model real CPU load, real cable faults
 ## Reproduce
 
 1. Open [`technova-lab.pkt`](technova-lab.pkt) in Cisco Packet Tracer (8.x).
-2. Run any command shown above on the named device.
-3. The outputs should match. The ACL hit counters ship at the values of the single captured run (4 matches per `deny` on ACL 101); repeating the ping matrix increments them by 4 per pass — that increment is expected, not a mismatch.
+2. When a device prompts, use the Credentials section above — the file opens freely, the devices are hardened.
+3. Run any command shown above on the named device. The outputs should match. The ACL hit counters ship at the values of the single captured run (4 matches per `deny` on ACL 101); repeating the ping matrix increments them by 4 per pass — that increment is expected, not a mismatch.
 
 ## Tools
 
